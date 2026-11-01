@@ -1,0 +1,390 @@
+package com.example.waimai
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.waimai.ui.theme.WaimaiTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+
+//商家
+data class Shop(
+    val name: String,
+    val sale: String,
+    val price: String,
+    val star: Float,
+    val minSend: Double
+)
+//菜品
+data class Food(
+    val name: String,
+    val price: Double
+)
+//购物车条目
+data class CartItem(
+    val food: Food,
+    var count: Int
+)
+//订单
+data class Order(
+    val orderItems: List<CartItem>,
+    val total: Double,
+    val time: String,
+    val address: String,
+    var status: String
+)
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            WaimaiTheme {
+                App()
+            }
+        }
+    }
+}
+
+@Composable
+fun App() {
+    //底部页面索引：0首页 1订单 2购物车 3我的
+    var pageIndex by remember { mutableStateOf(0) }
+    var selectedShop: Shop? by remember { mutableStateOf(null) }
+    var cartList by remember { mutableStateOf(mutableListOf<CartItem>()) }
+    var orderList by remember { mutableStateOf(mutableListOf<Order>()) }
+    var userAddress by remember { mutableStateOf("一区") }
+    var userName by remember { mutableStateOf("张三") }
+
+    //进入详情页优先展示详情
+    if(selectedShop != null){
+        ShopDetailPage(
+            shop = selectedShop!!,
+            onBack = { selectedShop = null },
+            cartList = cartList
+        )
+    }else{
+        when(pageIndex){
+            0 -> WaimaiHomePage(onShopClick = {selectedShop = it})
+            1 -> OrderPage(orderList)
+            2 -> CartPage(
+                cartList = cartList,
+                remove = {cartList.remove(it)},
+                submitOrder = {total, address ->
+                    val sdf = SimpleDateFormat("HH:mm:ss")
+                    val nowTime = sdf.format(Date())
+                    val newOrder = Order(orderItems = cartList.toList(), total = total, time = nowTime, address = address, status = "待配送")
+                    orderList.add(newOrder)
+                    cartList.clear()
+                },
+                userAddress = userAddress,
+                shopMinSend = selectedShop?.minSend ?: 0.0
+            )
+            3 -> MinePage(userName, userAddress, onNameChange = {userName = it}, onAddressChange = {userAddress = it})
+        }
+    }
+
+    //底部导航栏
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(55.dp)
+                .background(Color.White),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TabText("首页", pageIndex == 0){pageIndex = 0}
+            TabText("订单", pageIndex == 1){pageIndex = 1}
+            TabText("购物车", pageIndex == 2){pageIndex = 2}
+            TabText("我的", pageIndex == 3){pageIndex = 3}
+        }
+    }
+}
+
+@Composable
+fun TabText(text:String,isSelect:Boolean,onClick:()->Unit){
+    Text(
+        text = text,
+        color = if(isSelect) Color(0xFFFF4422) else Color.Gray,
+        modifier = Modifier.clickable { onClick() }
+    )
+}
+
+@Composable
+fun WaimaiHomePage(onShopClick:(Shop)->Unit){
+    val shopList = listOf(
+        Shop("黄焖鸡米饭","月售999","起送 ¥15",4.8f,15.0),
+        Shop("奶茶铺子","月售650","起送 ¥10",4.7f,10.0),
+        Shop("螺蛳粉","月售420","起送 ¥12",4.6f,12.0),
+        Shop("炸鸡汉堡","月售310","起送 ¥20",4.9f,20.0)
+    )
+    val categoryList = listOf("美食","奶茶","快餐","生鲜","超市")
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFFF4422))
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = "",
+                onValueChange = {},
+                placeholder = { Text("搜索商家、商品") },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
+
+        LazyRow(modifier = Modifier.padding(vertical = 12.dp)){
+            items(categoryList){
+                Box(modifier = Modifier
+                    .size(70.dp)
+                    .padding(horizontal = 8.dp)
+                    .background(Color(0xFFEEEEEE), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ){ Text(it) }
+            }
+        }
+
+        Text(
+            "附近商家",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+        )
+
+        LazyVerticalGrid(columns = GridCells.Fixed(1), modifier = Modifier.weight(1f)){
+            items(shopList){shop->
+                ShopItem(shop){onShopClick(shop)}
+            }
+        }
+    }
+}
+
+@Composable
+fun ShopItem(shop: Shop, onClick:()->Unit){
+    Row(modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp, vertical = 6.dp)
+        .background(Color(0xFFF7F7F7), RoundedCornerShape(10.dp))
+        .clickable { onClick() }
+        .padding(10.dp)
+    ){
+        Box(modifier = Modifier
+            .size(80.dp)
+            .background(Color.LightGray, RoundedCornerShape(8.dp)))
+        Column(modifier = Modifier.padding(start = 10.dp)){
+            Text(shop.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("⭐ ${shop.star}", fontSize = 13.sp, color = Color(0xFFFF9800))
+            Text(shop.sale, fontSize = 13.sp, color = Color.Gray)
+            Text(shop.price, fontSize = 13.sp, color = Color.Gray)
+        }
+    }
+}
+
+@Composable
+fun ShopDetailPage(shop: Shop, onBack:()->Unit, cartList:MutableList<CartItem>){
+    val foodList = listOf(
+        Food("菜品1",12.0),
+        Food("菜品2",18.0),
+        Food("菜品3",9.0)
+    )
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFFF4422))
+            .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ){
+            Text("< 返回", color = Color.White, modifier = Modifier.clickable { onBack() })
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(shop.name, color = Color.White, fontSize = 18.sp)
+        }
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally
+        ){
+            Box(modifier = Modifier
+                .size(120.dp)
+                .background(Color.LightGray, RoundedCornerShape(8.dp)))
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(shop.name, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("⭐ ${shop.star}", color = Color(0xFFFF9800))
+            Text(shop.sale, color = Color.Gray)
+            Text(shop.price, color = Color.Gray)
+            Spacer(modifier = Modifier.height(24.dp))
+            Text("菜品列表", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(12.dp))
+            foodList.forEach { food ->
+                var item = cartList.find { it.food.name == food.name }
+                var num = item?.count ?: 0
+                Row(modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("${food.name}  ¥${food.price}")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = {
+                            if(num > 1){
+                                item?.count = num - 1
+                            }else if(num == 1){
+                                cartList.remove(item)
+                            }
+                        }, enabled = num > 0, contentPadding = PaddingValues(4.dp)) {
+                            Text("-")
+                        }
+                        Text(" $num ", fontSize = 16.sp)
+                        Button(onClick = {
+                            if(item != null){
+                                item.count +=1
+                            }else{
+                                cartList.add(CartItem(food,1))
+                            }
+                        }, contentPadding = PaddingValues(4.dp)) {
+                            Text("+")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CartPage(cartList:MutableList<CartItem>, remove:(CartItem)->Unit, submitOrder:(Double,String)->Unit, userAddress:String, shopMinSend:Double){
+    var showDialog by remember { mutableStateOf(false) }
+    var total = 0.0
+    cartList.forEach { total += it.food.price * it.count }
+    val canSubmit = total >= shopMinSend && cartList.isNotEmpty()
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("购物车", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+        if(cartList.isEmpty()){
+            Text("购物车空空如也~", color = Color.Gray)
+        }else{
+            LazyColumn(modifier = Modifier.weight(1f)){
+                items(cartList){item->
+                    Row(modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ){
+                        Text("${item.food.name} ×${item.count}")
+                        Text("¥${item.food.price * item.count}")
+                        Text("删除", color = Color.Red, modifier = Modifier.clickable { remove(item) })
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("收货地址：$userAddress", fontSize = 15.sp)
+            Text("合计：¥$total", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            if(!canSubmit){
+                Text("⚠️ 未达到起送价 ¥$shopMinSend", color = Color.Red, fontSize = 14.sp)
+            }
+            Button(onClick = { showDialog = true }, modifier = Modifier.fillMaxWidth(), enabled = canSubmit) {
+                Text("去结算")
+            }
+        }
+    }
+
+    if(showDialog){
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("确认订单") },
+            text = { Text("收货地址：$userAddress \n确认提交订单，合计 ¥$total？") },
+            confirmButton = {
+                Button(onClick = {
+                    submitOrder(total, userAddress)
+                    showDialog = false
+                }) {
+                    Text("提交订单")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun OrderPage(orderList: MutableList<Order>){
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("订单页面", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+        if(orderList.isEmpty()){
+            Text("暂无订单", color = Color.Gray)
+        }else{
+            LazyColumn{
+                items(orderList){ order ->
+                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("下单时间：${order.time}")
+                            Text("收货地址：${order.address}")
+                            Text("订单状态：${order.status}", color = if(order.status=="待配送") Color(0xFFFF9800) else Color.Green)
+                            order.orderItems.forEach {
+                                Text("${it.food.name} ×${it.count}")
+                            }
+                            Text("订单总价：¥${order.total}", fontWeight = FontWeight.Bold)
+                            if(order.status == "待配送"){
+                                Button(onClick = { order.status = "已完成" }, modifier = Modifier.padding(top = 6.dp)) {
+                                    Text("确认收货")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MinePage(name:String, address:String, onNameChange:(String)->Unit, onAddressChange:(String)->Unit){
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("我的", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(16.dp))
+        TextField(
+            value = name,
+            onValueChange = onNameChange,
+            label = { Text("昵称") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        TextField(
+            value = address,
+            onValueChange = onAddressChange,
+            label = { Text("收货地址") },
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
